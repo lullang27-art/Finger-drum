@@ -60,9 +60,13 @@ export class Player {
     return this.buffer ? this.buffer.duration : 0;
   }
 
-  play(offset = null) {
+  async play(offset = null) {
     if (!this.buffer) return;
-    this.resume();
+    // CRITICAL on mobile: the AudioContext starts suspended and its clock
+    // (ctx.currentTime) does not advance until resume() resolves. We MUST
+    // await it before capturing startCtxTime / scheduling the source,
+    // otherwise playback never progresses and the play head stays frozen.
+    await this.resume();
     if (this.playing) this.stopSource();
     const startAt = offset != null ? offset : this.startOffset;
 
@@ -96,14 +100,16 @@ export class Player {
   }
 
   toggle() {
-    if (this.playing) this.pause(); else this.play();
+    if (this.playing) { this.pause(); return Promise.resolve(); }
+    return this.play();
   }
 
   seek(seconds) {
     const wasPlaying = this.playing;
     if (wasPlaying) this.stopSource();
     this.startOffset = Math.max(0, Math.min(seconds, this.duration));
-    if (wasPlaying) this.play(this.startOffset);
+    if (wasPlaying) return this.play(this.startOffset);
+    return Promise.resolve();
   }
 
   stopSource() {
