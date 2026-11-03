@@ -1,0 +1,133 @@
+name: Build Android APK (TWA)
+
+# Wraps the deployed PWA into an Android APK using Bubblewrap (Google's
+# official Trusted Web Activity tooling). Produces a debug-signed APK you can
+# install directly on a phone (adb install / sideload). Runs after Pages
+# deploy, or manually.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pwa_url:
+        description: "Full URL to the deployed PWA (the page that serves manifest.webmanifest). Leave blank to auto-derive the GitHub Pages URL."
+        required: false
+        default: ""
+  workflow_run:
+    workflows: ["Deploy PWA to GitHub Pages"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Java (for Android build)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Resolve PWA URL
+        id: url
+        run: |
+          if [ -n "${{ github.event.inputs.pwa_url }}" ]; then
+            URL="${{ github.event.inputs.pwa_url }}"
+          else
+            OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+            REPO_NAME="${{ github.event.repository.name }}"
+            URL="https://${OWNER_LC}.github.io/${REPO_NAME}/"
+          fi
+          echo "pwa_url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Using PWA URL: $URL"
+
+      - name: Install Bubblewrap
+        run: npm install -g @bubblewrap/cli
+
+      - name: Initialize & build TWA
+        env:
+          PWA_URL: ${{ steps.url.outputs.pwa_url }}
+        run: |
+          set -e
+          # Accept Android SDK licenses non-interactively
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+
+          MANIFEST_URL="${PWA_URL%/}/manifest.webmanifest"
+          echo "Manifest: $MANIFEST_URL"
+
+          mkdir -p twa && cd twa
+
+          # Initialize from the live web manifest. --directory . keeps files here.
+          bubblewrap init --manifest "$MANIFEST_URL" <<'EOF' || true
+EOF
+
+          # Bubblewrap init is interactive; if the heredoc path did not fully
+          # configure it, fall back to a scripted twa-manifest.json.
+          if [ ! -f twa-manifest.json ]; then
+            OWNER_LC=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+            cat > twa-manifest.json <<JSON
+          {
+            "packageId": "io.github.${OWNER_LC}.drumtrainer",
+            "host": "$(echo "$PWA_URL" | sed -E 's#https?://##; s#/.*##')",
+            "name": "Finger Drum Trainer",
+            "launcherName": "DrumTrainer",
+            "display": "standalone",
+            "themeColor": "#0c0f14",
+            "navigationColor": "#0c0f14",
+            "backgroundColor": "#0c0f14",
+            "startUrl": "$(echo "$PWA_URL" | sed -E 's#https?://[^/]+##')",
+            "iconUrl": "${PWA_URL%/}/icons/icon-512.png",
+            "maskableIconUrl": "${PWA_URL%/}/icons/icon-512.png",
+            "appVersionName": "1.0.0",
+            "appVersion": 1,
+            "signingKey": { "path": "./android.keystore", "alias": "android" },
+            "fallbackType": "customtabs",
+            "enableNotifications": false,
+            "features": {},
+            "shortcuts": [],
+            "generatorApp": "bubblewrap-cli",
+            "webManifestUrl": "$MANIFEST_URL"
+          }
+JSON
+          fi
+
+          # Create a debug keystore so the APK is signed (installable).
+          keytool -genkeypair -v -keystore android.keystore \
+            -alias android -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=Drum Trainer, OU=Dev, O=Dev, L=NA, S=NA, C=NA"
+
+          # Build the APK non-interactively.
+          bubblewrap build --skipPwaValidation \
+            --signingKeyPath ./android.keystore \
+            --signingKeyAlias android <<'EOF' || bubblewrap build --skipPwaValidation
+android
+android
+EOF
+
+      - name: Locate APK
+        id: apk
+        run: |
+          APK=$(find twa -name "*.apk" | head -n1)
+          echo "Found APK: $APK"
+          echo "apk_path=$APK" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
+        if: steps.apk.outputs.apk_path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: finger-drum-trainer-apk
+          path: ${{ steps.apk.outputs.apk_path }}
+          if-no-files-found: error
