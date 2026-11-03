@@ -133,6 +133,7 @@ body { height: 100dvh; }
 .roll-canvas { flex: 1; display: block; width: 100%; height: 100%; }
 
 /* Under-stage controls */
+.mobile-controls-toggle { display: none; } /* desktop: hidden */
 .under-stage { display: flex; flex-direction: column; gap: 8px; }
 .seek-row { display: flex; align-items: center; gap: 10px; }
 .seek { flex: 1; }
@@ -221,22 +222,105 @@ input[type="range"]::-moz-range-thumb {
   width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; border: none;
 }
 
-/* Responsive: phones in portrait */
-@media (max-width: 680px) {
-  .play-screen { flex-direction: column; }
-  .rail {
-    width: 100%; flex-direction: row; align-items: center; gap: 10px;
-    border-right: none; border-bottom: 1px solid var(--line); padding: 8px 12px;
-    overflow-x: auto;
+/* ===================== MOBILE PORTRAIT LAYOUT ===================== */
+/* Goal: pads are ALWAYS visible at the bottom and tappable; the note
+   highway fills the space above but never pushes the pads off-screen.
+   Auxiliary controls (mixer / seek / speed / tracks) are compacted into a
+   collapsible drawer so they don't steal pad space. */
+@media (max-width: 760px) {
+  html, body { overflow: hidden; }
+
+  .play-screen {
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
   }
-  .rail-top { flex-direction: column; gap: 6px; }
-  .mixer { flex-direction: row; align-items: center; gap: 8px; flex: 1; }
-  .mixer label { margin-top: 0; }
-  .vmix { width: 64px; }
-  .transport { margin-top: 0; flex-direction: row; }
-  .round-btn { width: 48px; height: 48px; font-size: 18px; }
-  .lane-labels { width: 78px; }
-  .lane-label { font-size: 10px; padding: 0 6px; }
-  .pad-grid { height: 42vh; }
+
+  /* --- Top compact bar: back, title, transport, more --- */
+  .rail {
+    width: 100%; flex-shrink: 0;
+    flex-direction: row; align-items: center; gap: 8px;
+    border-right: none; border-bottom: 1px solid var(--line);
+    padding: 6px 10px; padding-top: max(6px, env(safe-area-inset-top));
+    overflow: visible;
+  }
+  .rail-top { flex-direction: row; gap: 6px; }
+  .icon-btn { width: 38px; height: 38px; font-size: 17px; }
+
+  /* Hide the vertical mixer & checkbox in the rail on mobile; they move
+     into the drawer. Keep the transport buttons in the top bar. */
+  .rail .mixer,
+  .rail .switch-row { display: none; }
+
+  .transport { margin: 0 0 0 auto; flex-direction: row; gap: 10px; }
+  .round-btn { width: 46px; height: 46px; font-size: 18px; border-width: 2px; }
+
+  /* --- Stage becomes a vertical stack that fits the viewport exactly --- */
+  .stage {
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    gap: 8px; overflow: hidden;
+  }
+
+  .stage-header { flex-shrink: 0; }
+  .song-title { font-size: 14px; max-width: 48%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stats { gap: 12px; }
+  .stat-num { font-size: 15px; }
+  .stat-lbl { font-size: 9px; }
+
+  /* Highway: flexes to fill leftover space, but capped so pads always fit. */
+  .highway {
+    flex: 1 1 auto; min-height: 120px; max-height: 42vh;
+  }
+  .lane-labels { width: 72px; }
+  .lane-label { font-size: 10px; padding: 0 6px; gap: 5px; }
+
+  /* Collapsible controls drawer (seek/speed/mixer/tracks) */
+  .mobile-controls-toggle {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    flex-shrink: 0; font-size: 12px; color: var(--muted);
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px; cursor: pointer; width: 100%;
+  }
+  .under-stage, .tracks-row { flex-shrink: 0; }
+
+  /* When drawer is collapsed, hide heavy controls but keep seek bar visible. */
+  .stage.controls-collapsed .speed-row,
+  .stage.controls-collapsed .tracks-row { display: none; }
+
+  .under-stage { gap: 6px; }
+  .seek-row { gap: 8px; }
+  .time { font-size: 11px; width: 34px; }
+  .speed-row { gap: 8px; }
+  .speed-lbl { font-size: 10px; }
+  .speed-presets { gap: 5px; }
+  .speed-preset { padding: 4px 8px; font-size: 11px; }
+  .tracks-row { gap: 6px; }
+  .tracks-lbl { font-size: 11px; width: 100%; }
+  .track-toggle { font-size: 11px; padding: 5px 9px; }
+
+  /* --- Pads pinned at the bottom, always visible & big enough to tap --- */
+  .pad-grid {
+    flex-shrink: 0;
+    height: min(46vh, 320px);
+    min-height: 220px;
+    gap: 6px;
+  }
   .pad-label { font-size: 12px; }
+  .pad-key { display: none; } /* keyboard keys irrelevant on touch */
+}
+
+/* Short phones (e.g. 360x640): shrink the pad grid and highway so the whole
+   layout fits even when the controls drawer is expanded. */
+@media (max-width: 760px) and (max-height: 720px) {
+  .pad-grid { min-height: 180px; height: min(42vh, 260px); }
+  .highway { max-height: 34vh; min-height: 96px; }
+  .pad-label { font-size: 11px; }
+}
+
+/* Landscape phones: keep the side rail but shrink everything. */
+@media (max-width: 920px) and (orientation: landscape) and (max-height: 520px) {
+  .rail .mixer label { font-size: 9px; }
+  .pad-grid { height: auto; min-height: 0; }
+  .highway { max-height: none; }
 }
