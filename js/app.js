@@ -374,10 +374,10 @@ function wire() {
   $('#back-to-library').addEventListener('click', () => { leavePlay(); renderLibrary(); showScreen('screen-library'); });
 
   // Transport
-  $('#play-pause').addEventListener('click', () => {
+  $('#play-pause').addEventListener('click', async () => {
     if (!player) return;
-    player.resume();
-    player.toggle();
+    await player.resume();      // unlock audio within the user gesture
+    await player.toggle();      // wait until play actually starts (clock anchored)
     lastGuideScan = player.currentTime;
     updateTransportUI();
   });
@@ -453,7 +453,11 @@ function wire() {
       const tag = (e.target.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'select' || tag === 'button') return;
       e.preventDefault();
-      if (player) { player.resume(); player.toggle(); updateTransportUI(); }
+      if (player) {
+        player.resume()
+          .then(() => player.toggle())
+          .then(() => { lastGuideScan = player.currentTime; updateTransportUI(); });
+      }
     }
   });
 }
