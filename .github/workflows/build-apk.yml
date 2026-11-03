@@ -22,6 +22,12 @@ permissions:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    # Only run on manual dispatch, or when the Pages deploy actually SUCCEEDED
+    # (a workflow_run fires on completion regardless of outcome, so we must
+    # guard against failed upstream runs — that caused the instant 0s failure).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
