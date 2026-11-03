@@ -195,6 +195,20 @@ async function openSong(id, preloaded = null) {
   updateTransportUI();
 
   showScreen('screen-play');
+
+  // On narrow (phone) screens, start with the controls drawer collapsed so
+  // the pads are fully visible without scrolling.
+  const stage = $('.stage');
+  const label = $('#mobile-controls-toggle-label');
+  if (stage) {
+    if (window.matchMedia('(max-width: 760px)').matches) {
+      stage.classList.add('controls-collapsed');
+      if (label) label.textContent = '⚙ Controls ▸';
+    } else {
+      stage.classList.remove('controls-collapsed');
+    }
+  }
+
   startLoop();
 }
 
@@ -421,6 +435,17 @@ function wire() {
     showScreen('screen-settings');
   });
   $('#settings-back').addEventListener('click', () => showScreen('screen-play'));
+
+  // Mobile controls drawer toggle (collapses speed/tracks to free pad space)
+  const ctrlToggle = $('#mobile-controls-toggle');
+  const ctrlLabel = $('#mobile-controls-toggle-label');
+  if (ctrlToggle) {
+    ctrlToggle.addEventListener('click', () => {
+      const stage = $('.stage');
+      const collapsed = stage.classList.toggle('controls-collapsed');
+      ctrlLabel.textContent = collapsed ? '⚙ Controls ▸' : '⚙ Controls ▾';
+    });
+  }
 
   // Keyboard transport (space = play/pause)
   window.addEventListener('keydown', (e) => {
